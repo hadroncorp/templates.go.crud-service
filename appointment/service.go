@@ -170,20 +170,10 @@ func (l LocalAdminManager) DeleteByKey(ctx context.Context, key string) error {
 // Finally, if dependency entities are external to the current microservice, apply lazy-loading patterns (calling services synchronously, then store the result locally) or adopt an Event-Driven
 // Architecture (EDA) for your platform (asynchronous and easier to scale, harder to debug and handle failure scenarios).
 //
-// B. Aggregation at service level: Referenced entities are not guaranteed to be stored on the same persistence store or data space (i.e. table, collection) as the required entity.
-// Referenced entites might even come from external sources like another microservice or even a third-party provider/service.
-//
-// This option will fetch dependency entites synchronously for each original entity, populating its fields with fetched dependencies. All done at application service-level.
-//
-// You can improve performance by fetching these with concurrency and by using Batch APIs. Just be sure to define a concurrent worker count constraint (with semaphore
-// pattern and/or with connection pooling) to avoid congesting your own service.
-//
-// Recommended when persistence storages are local to the current microservice (bounded context). If storages are external, you should consider another option.
-//
-// C. Reference identifiers-only: No aggregations needed. Just read from your read database (can be the same as the transactional one).
+// B. Reference identifiers-only: No aggregations needed. Just read from your read database (can be the same as the transactional one).
 // Dependency entities will be shown by their identifiers only.
 //
-// D. Aggregation at gateway level: Referenced entities are not guaranteed to be stored on the same persistence store or data space (i.e. table, collection) as the required entity.
+// C. Aggregation at gateway level: Referenced entities are not guaranteed to be stored on the same persistence store or data space (i.e. table, collection) as the required entity.
 // Referenced entites might even come from external sources like another microservice or even a third-party provider/service.
 //
 // This option will fetch dependency entites synchronously for each original entity, populating its fields with fetched dependencies. All done at gateway service-level.
@@ -214,7 +204,8 @@ type ListByPlaceArgs struct {
 	PlaceID string
 }
 
-// -- Local --
+// -- LocalGateway --
+// Option 'C'.
 
 type LocalGatewayFetcher struct {
 	placeFetcher    place.Fetcher
@@ -253,11 +244,14 @@ func (l LocalGatewayFetcher) GetByKey(ctx context.Context, key string) (ReadMode
 }
 
 func (l LocalGatewayFetcher) ListByUser(ctx context.Context, args ListByUserArgs) (*paging.Page[ListUserReadModel], error) {
+	// NOTE: In most cases, sorting shall not be specified by external layers (or just partially).
+	// In this case, domain tells us to sort appointments naturally (by schedule_time, ascending).
+	// This routine also accepts a dynamic sorting operator so external layers can sort results in a descending maner.
 	page, err := l.listUserRepository.FindAll(ctx,
 		criteria.WithFilter(_scheduledByField, criteria.Equal, args.UserID),
 		criteria.WithPageSize(args.PageSize),
 		criteria.WithPageToken(args.PageToken),
-		criteria.WithSorting(_scheduleTimeField, criteria.SortDescending),
+		criteria.WithSorting(_scheduleTimeField, lo.CoalesceOrEmpty(args.Sort.ToSort().Operator, criteria.SortAscending)),
 	)
 	if err != nil {
 		return nil, err
@@ -296,11 +290,14 @@ func (l LocalGatewayFetcher) ListByUser(ctx context.Context, args ListByUserArgs
 }
 
 func (l LocalGatewayFetcher) ListByPlace(ctx context.Context, args ListByPlaceArgs) (*paging.Page[ListPlaceReadModel], error) {
+	// NOTE: In most cases, sorting shall not be specified by external layers (or just partially).
+	// In this case, domain tells us to sort appointments naturally (by schedule_time, ascending).
+	// This routine also accepts a dynamic sorting operator so external layers can sort results in a descending maner.
 	page, err := l.listPlaceRepository.FindAll(ctx,
 		criteria.WithFilter(_placeIDField, criteria.Equal, args.PlaceID),
 		criteria.WithPageSize(args.PageSize),
 		criteria.WithPageToken(args.PageToken),
-		criteria.WithSorting(_scheduleTimeField, criteria.SortDescending),
+		criteria.WithSorting(_scheduleTimeField, lo.CoalesceOrEmpty(args.Sort.ToSort().Operator, criteria.SortAscending)),
 	)
 	if err != nil {
 		return nil, err
