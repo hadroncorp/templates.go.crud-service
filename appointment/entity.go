@@ -73,6 +73,10 @@ func (a Appointment) validate() error {
 }
 
 func (a *Appointment) Cancel(ctx context.Context, reason string) error {
+	if a.status == StatusCompleted {
+		return ErrIsAlreadyCompleted
+	}
+
 	a.notes += "CANCEL: " + reason + "\n"
 	a.status = StatusCancelled
 	if err := a.validate(); err != nil {
@@ -84,6 +88,10 @@ func (a *Appointment) Cancel(ctx context.Context, reason string) error {
 }
 
 func (a *Appointment) Reschedule(ctx context.Context, reason string, newTime time.Time) error {
+	if a.status == StatusCompleted {
+		return ErrIsAlreadyCompleted
+	}
+
 	if newTime.Equal(a.scheduleTime) {
 		return nil // no-op
 	}
@@ -112,6 +120,12 @@ func (a *Appointment) Update(ctx context.Context, opts ...UpdateOption) error {
 
 func (a *Appointment) Delete(ctx context.Context) {
 	audit.DeleteAuditable(ctx, &a.Auditable)
+	// TODO: Add events
+}
+
+func (a *Appointment) MarkAsCompleted(ctx context.Context) {
+	a.status = StatusCompleted
+	audit.UpdateAuditable(ctx, &a.Auditable)
 	// TODO: Add events
 }
 

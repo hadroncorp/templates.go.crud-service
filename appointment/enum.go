@@ -8,6 +8,7 @@ const (
 	StatusUnknown = Status(iota)
 	StatusScheduled
 	StatusCancelled
+	StatusCompleted
 )
 
 // compile-time assertions
@@ -18,11 +19,13 @@ var (
 		"UNKNOWN":   StatusUnknown,
 		"SCHEDULED": StatusScheduled,
 		"CANCELLED": StatusCancelled,
+		"COMPLETED": StatusCompleted,
 	}
 	_statusToPrimitivesMap = map[Status]string{
 		StatusUnknown:   "UNKOWN",
 		StatusScheduled: "SCHEDULED",
 		StatusCancelled: "CANCELLED",
+		StatusCompleted: "COMPLETED",
 	}
 )
 

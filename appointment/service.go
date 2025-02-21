@@ -106,6 +106,7 @@ func (l LocalScheduler) Reschedule(ctx context.Context, key, reason string, newT
 // to understand that.
 
 type AdminManager interface {
+	MarkAsCompletedByKey(ctx context.Context, key string) error
 	UpdateByKey(ctx context.Context, key string, opts ...UpdateOption) (Appointment, error)
 	DeleteByKey(ctx context.Context, key string) error
 }
@@ -142,6 +143,15 @@ func (l LocalAdminManager) DeleteByKey(ctx context.Context, key string) error {
 	}
 	appointment.Delete(ctx)
 	return l.repository.Delete(ctx, appointment)
+}
+
+func (l LocalAdminManager) MarkAsCompletedByKey(ctx context.Context, key string) error {
+	appointment, err := fetchByKey(l.repository, ctx, key)
+	if err != nil {
+		return err
+	}
+	appointment.MarkAsCompleted(ctx)
+	return l.repository.Save(ctx, appointment)
 }
 
 // -> Fetcher <-
