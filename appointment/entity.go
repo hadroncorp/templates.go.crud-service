@@ -23,6 +23,7 @@ type Appointment struct {
 	scheduledBy  string
 	scheduleTime time.Time
 	notes        string
+	status       Status
 }
 
 // compile-time assertion(s)
@@ -56,16 +57,24 @@ func (a Appointment) Notes() string {
 	return a.notes
 }
 
+func (a Appointment) Status() Status {
+	return a.status
+}
+
 func (a Appointment) validate() error {
 	now := time.Now().UTC()
 	if a.scheduleTime.Before(now) {
 		return ErrScheduledBeforeNow
+	}
+	if a.status == StatusUnknown {
+		return ErrInvalidStatus
 	}
 	return nil
 }
 
 func (a *Appointment) Cancel(ctx context.Context, reason string) error {
 	a.notes += "CANCEL: " + reason + "\n"
+	a.status = StatusCancelled
 	if err := a.validate(); err != nil {
 		return err
 	}
@@ -79,6 +88,7 @@ func (a *Appointment) Reschedule(ctx context.Context, reason string, newTime tim
 		return nil // no-op
 	}
 	a.notes += "RESCHEDULE: " + reason + "\n"
+	a.status = StatusScheduled
 	a.scheduleTime = newTime.UTC()
 	if err := a.validate(); err != nil {
 		return err
@@ -135,6 +145,12 @@ func WithNotesUpdate(notes string) UpdateOption {
 	}
 }
 
+func WithStatusUpdate(status Status) UpdateOption {
+	return func(options *Appointment) {
+		options.status = status
+	}
+}
+
 // --> Factory Routines <--
 
 type NewArgs struct {
@@ -158,6 +174,7 @@ func New(args NewArgs, opts ...NewOption) (Appointment, error) {
 		targetedTo:   options.targetedTo,
 		scheduledBy:  args.ScheduledBy,
 		scheduleTime: args.ScheduleTime.UTC(),
+		status:       StatusScheduled,
 	}
 	if err := appointment.validate(); err != nil {
 		return Appointment{}, err

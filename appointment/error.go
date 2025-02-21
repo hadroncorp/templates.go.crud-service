@@ -6,5 +6,6 @@ var (
 	ErrScheduledBeforeNow = syserr.New(syserr.InvalidArgument, "appointment scheduled before current time",
 		syserr.WithInternalCode("SCHEDULED_BEFORE_CURRENT_TIME"),
 	)
-	ErrNotFound = syserr.NewResourceNotFound[Appointment]()
+	ErrNotFound      = syserr.NewResourceNotFound[Appointment]()
+	ErrInvalidStatus = syserr.NewNotOneOf("status", StatusScheduled.String(), StatusCancelled.String())
 )
