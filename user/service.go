@@ -33,13 +33,11 @@ func (l LocalFetcher) GetByKey(ctx context.Context, key string) (User, error) {
 }
 
 func (l LocalFetcher) ListByKeys(ctx context.Context, keys []string) ([]User, error) {
-	page, err := l.repository.FindAll(ctx,
-		criteria.WithFilter(_idField, criteria.In, keys),
-	)
+	users, err := l.repository.FindAllByKeys(ctx, keys)
 	if err != nil {
 		return nil, err
-	} else if page == nil {
+	} else if len(users) == 0 {
 		return nil, ErrNotFound
 	}
-	return page.Items, nil
+	return users, nil
 }
