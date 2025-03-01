@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package hadron.places.v1;
+
+option go_package="event-schema-registry/placespb;placespb";
+
+enum AppointmentStatus {
+  APPOINTMENT_STATUS_UNSPECIFIED = 0;
+  APPOINTMENT_STATUS_SCHEDULED = 1;
+  APPOINTMENT_STATUS_CANCELLED = 2;
+  APPOINTMENT_STATUS_COMPLETED = 3;
+}

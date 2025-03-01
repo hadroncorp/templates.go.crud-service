@@ -6,6 +6,7 @@ import (
 
 	"github.com/hadroncorp/geck/persistence"
 	"github.com/hadroncorp/geck/persistence/audit"
+	"github.com/hadroncorp/geck/transport/event"
 
 	"github.com/hadroncorp/service-template/domain/valueobject"
 )
@@ -14,6 +15,7 @@ import (
 // exposed routines (e.g. New, Appointment.Update) are used, ensuring a valid domain state.
 
 type Appointment struct {
+	event.AggregatorTemplate
 	audit.Auditable
 	id      string
 	title   valueobject.Title
@@ -77,13 +79,14 @@ func (a *Appointment) Cancel(ctx context.Context, reason string) error {
 		return ErrIsAlreadyCompleted
 	}
 
-	a.notes += "CANCEL: " + reason + "\n"
-	a.status = StatusCancelled
-	if err := a.validate(); err != nil {
+	err := a.Update(ctx,
+		WithNotesUpdate(a.notes+"CANCEL: "+reason+"\n"),
+		WithStatusUpdate(StatusCancelled),
+	)
+	if err != nil {
 		return err
 	}
-	audit.UpdateAuditable(ctx, &a.Auditable)
-	// TODO: Add events
+	a.RegisterEvents(newCanceledEvent(a))
 	return nil
 }
 
@@ -95,15 +98,26 @@ func (a *Appointment) Reschedule(ctx context.Context, reason string, newTime tim
 	if newTime.Equal(a.scheduleTime) {
 		return nil // no-op
 	}
-	a.notes += "RESCHEDULE: " + reason + "\n"
-	a.status = StatusScheduled
-	a.scheduleTime = newTime.UTC()
-	if err := a.validate(); err != nil {
+
+	err := a.Update(ctx,
+		WithNotesUpdate(a.notes+"RESCHEDULE: "+reason+"\n"),
+		WithStatusUpdate(StatusScheduled),
+	)
+	if err != nil {
 		return err
 	}
-	audit.UpdateAuditable(ctx, &a.Auditable)
-	// TODO: Add events
+	a.RegisterEvents(newRescheduledEvent(a))
 	return nil
+}
+
+func (a *Appointment) Delete(ctx context.Context) {
+	audit.DeleteAuditable(ctx, &a.Auditable)
+	a.RegisterEvents(newDeletedEvent(a))
+}
+
+func (a *Appointment) MarkAsCompleted(ctx context.Context) {
+	_ = a.Update(ctx, WithStatusUpdate(StatusCompleted))
+	a.RegisterEvents(newCompletedEvent(a))
 }
 
 func (a *Appointment) Update(ctx context.Context, opts ...UpdateOption) error {
@@ -114,19 +128,8 @@ func (a *Appointment) Update(ctx context.Context, opts ...UpdateOption) error {
 		return err
 	}
 	audit.UpdateAuditable(ctx, &a.Auditable)
-	// TODO: Add events
+	a.RegisterEvents(newUpdatedEvent(a))
 	return nil
-}
-
-func (a *Appointment) Delete(ctx context.Context) {
-	audit.DeleteAuditable(ctx, &a.Auditable)
-	// TODO: Add events
-}
-
-func (a *Appointment) MarkAsCompleted(ctx context.Context) {
-	a.status = StatusCompleted
-	audit.UpdateAuditable(ctx, &a.Auditable)
-	// TODO: Add events
 }
 
 // -- Options --
@@ -175,13 +178,14 @@ type NewArgs struct {
 	ScheduleTime time.Time
 }
 
-func New(args NewArgs, opts ...NewOption) (Appointment, error) {
+func New(ctx context.Context, args NewArgs, opts ...NewOption) (Appointment, error) {
 	options := newOptions{}
 	for _, opt := range opts {
 		opt(&options)
 	}
 
 	appointment := Appointment{
+		Auditable:    audit.NewAuditable(ctx),
 		id:           args.ID,
 		title:        args.Title,
 		placeID:      args.PlaceID,
@@ -194,7 +198,8 @@ func New(args NewArgs, opts ...NewOption) (Appointment, error) {
 		return Appointment{}, err
 	}
 
-	// TODO: Add events
+	ev := newScheduledEvent(appointment)
+	appointment.RegisterEvents(ev)
 	return appointment, nil
 }
 

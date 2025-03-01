@@ -1,6 +1,7 @@
 package appointment_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,12 +9,14 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	ap, err := appointment.New(appointment.NewArgs{
+	ctx := context.Background()
+	scheduleTime := time.Now().Add(time.Hour * 24)
+	ap, err := appointment.New(ctx, appointment.NewArgs{
 		ID:           "123",
 		Title:        "Some title",
 		PlaceID:      "some-place-id",
 		ScheduledBy:  "some-user",
-		ScheduleTime: time.Now(),
+		ScheduleTime: scheduleTime,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -24,15 +27,16 @@ func TestNew(t *testing.T) {
 	t.Log(ap.TargetedTo())
 	t.Log(ap.ScheduledBy())
 	t.Log(ap.ScheduleTime().String())
+	t.Logf("%+v", ap.PullEvents())
 
 	t.Log("\n")
 
-	ap, err = appointment.New(appointment.NewArgs{
+	ap, err = appointment.New(ctx, appointment.NewArgs{
 		ID:           "123",
 		Title:        "Some title",
 		PlaceID:      "some-place-id",
 		ScheduledBy:  "some-user",
-		ScheduleTime: time.Now(),
+		ScheduleTime: scheduleTime,
 	}, appointment.WithTargetNew("some-employee"))
 	if err != nil {
 		t.Fatal(err)
@@ -43,4 +47,5 @@ func TestNew(t *testing.T) {
 	t.Log(ap.TargetedTo())
 	t.Log(ap.ScheduledBy())
 	t.Log(ap.ScheduleTime().String())
+	t.Logf("%+v", ap.PullEvents())
 }

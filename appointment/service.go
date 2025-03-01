@@ -44,7 +44,7 @@ func fetchByKey(repository persistence.ReadRepository[string, Appointment], ctx 
 // 	- Use clear and concise names for your services.
 //	- Use ubiquitous language (aka. domain language) (i.e. a language every stakeholder understand).
 // 	- Design your struct and routine names like a library API. Use Go's stdlib as inspiration.
-//	- Avoid generic names like Create, Update, Delete unless neccesary. Leave those for Management or Persistence APIs.
+//	- Avoid generic names like Create, Update, Delete unless necessary. Leave those for Management or Persistence APIs.
 
 // -> Scheduler <-
 
@@ -67,7 +67,7 @@ type LocalScheduler struct {
 var _ Scheduler = (*LocalScheduler)(nil)
 
 func (l LocalScheduler) Schedule(ctx context.Context, args NewArgs, opts ...NewOption) error {
-	appointment, err := New(args, opts...)
+	appointment, err := New(ctx, args, opts...)
 	if err != nil {
 		return err
 	}
@@ -157,19 +157,19 @@ func (l LocalAdminManager) MarkAsCompletedByKey(ctx context.Context, key string)
 // -> Fetcher <-
 
 // NOTE: Separating read from write operations is key. Read operations can behave very differently from transactional operations
-// as they might use another storage to fetch data. Even if its the same "database", there might be read nodes specially
+// as they might use another storage to fetch data. Even if it's the same "database", there might be read nodes specially
 // provisioned by your team to reduce overhead from the master (write) nodes, improving resiliency and reducing the need to
-// scale for just read operations. By defining a fetcher (or similar) APIs, you already telling API clients
-// this is a service for read operations. They dont need to see internal implementations.
+// scale for just read operations. By defining a fetcher (or similar) APIs, you're already telling API clients
+// this is a service for read operations. They don't need to see internal implementations.
 
 // NOTE: Transactional services (e.g. AdminManager, Scheduler) must NOT use Fetcher APIs as they do not guarantee data consistency.
-// Exceptions might be data stored in external providers/storages, nevertheless, consider there might be data incosistencies. This
-// can be solved with distributed transactions or 2-phase commit procesess, both of them are hard to implement and also to maintain.
+// Exceptions might be data stored in external providers/storages, nevertheless, consider there might be data inconsistencies. This
+// can be solved with distributed transactions or 2-phase commit processes, both of them are hard to implement and also to maintain.
 
 // NOTE: When dealing with read operations, you might have different options to retrieve dependency entities:
 //
 // A. Denormalized data: All required data is stored at row/document level. For each row/document in your data space (i.e. table, collection),
-// all of the data from entity dependencies are stored as well.
+// all the data from entity dependencies are stored as well.
 //
 // If those dependencies (with their denormalized fields) are immutable or not frequently updated, this might be the best option as is faster than others in simpler terms.
 // If not (updated frequently), there will be a lot of heavy (and complex) write operations to update just one dependency entity (as it might be duplicated
@@ -184,9 +184,9 @@ func (l LocalAdminManager) MarkAsCompletedByKey(ctx context.Context, key string)
 // Dependency entities will be shown by their identifiers only.
 //
 // C. Aggregation at gateway level: Referenced entities are not guaranteed to be stored on the same persistence store or data space (i.e. table, collection) as the required entity.
-// Referenced entites might even come from external sources like another microservice or even a third-party provider/service.
+// Referenced entities might even come from external sources like another microservice or even a third-party provider/service.
 //
-// This option will fetch dependency entites synchronously for each original entity, populating its fields with fetched dependencies. All done at gateway service-level.
+// This option will fetch dependency entities synchronously for each original entity, populating its fields with fetched dependencies. All done at gateway service-level.
 // Gateway might be a separate microservice or just a local-defined service.
 //
 // A separated microservice might be the best option if you look to encapsulate several operations for a certain client (e.g. mobile, web). This is known as the gateway

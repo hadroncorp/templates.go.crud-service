@@ -2,8 +2,6 @@ package user
 
 import (
 	"context"
-
-	"github.com/hadroncorp/geck/persistence/criteria"
 )
 
 // --> Application Services <--
