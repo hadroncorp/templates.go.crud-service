@@ -9,11 +9,11 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/containerd/containerd/pkg/atomic"
 	"github.com/hadroncorp/geck/event"
 	"github.com/hadroncorp/geck/persistence/identifier"
 	"github.com/hadroncorp/geck/persistence/postgres/postgrestest"
@@ -159,13 +159,14 @@ func (s *managerIntegrationSuite) TestCreateOrganization() {
 	// Arrange
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancelFunc()
-	wasReceived := atomic.NewBool(false)
+	wasReceived := &atomic.Bool{}
+	wasReceived.Store(false)
 	closeReaderFunc := s.setupReader(ctx, organization.TopicCreated, func(scopedCtx context.Context, message stream.Message) error {
 		createdEvent := &iampb.OrganizationCreatedEvent{}
 		s.Require().NoError(proto.Unmarshal(message.Data, createdEvent))
 		s.Assert().Equal("3", createdEvent.GetOrganizationId())
 		s.Assert().Equal("foo", createdEvent.GetName())
-		wasReceived.Set()
+		wasReceived.Store(true)
 		return nil
 	})
 	defer func() {
@@ -194,7 +195,7 @@ func (s *managerIntegrationSuite) TestCreateOrganization() {
 		s.T().Fatal(ctx.Err())
 	case <-time.After(time.Second * 5):
 		// Wait for the message to be consumed
-		s.Assert().True(wasReceived.IsSet(), "message received")
+		s.Assert().True(wasReceived.Load(), "message received")
 	}
 }
 
@@ -202,9 +203,10 @@ func (s *managerIntegrationSuite) TestUpdateOrganization() {
 	// Arrange
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancelFunc()
-	wasReceived := atomic.NewBool(false)
+	wasReceived := &atomic.Bool{}
+	wasReceived.Store(false)
 	closeReaderFunc := s.setupReader(ctx, organization.TopicUpdated, func(scopedCtx context.Context, message stream.Message) error {
-		wasReceived.Set()
+		wasReceived.Store(true)
 		ev := &iampb.OrganizationUpdatedEvent{}
 		s.Require().NoError(proto.Unmarshal(message.Data, ev))
 		s.Assert().Equal("1", ev.GetOrganizationId())
@@ -237,7 +239,7 @@ func (s *managerIntegrationSuite) TestUpdateOrganization() {
 		s.T().Fatal(ctx.Err())
 	case <-time.After(time.Second * 5):
 		// Wait for the message to be consumed
-		s.Assert().True(wasReceived.IsSet(), "message received")
+		s.Assert().True(wasReceived.Load(), "message received")
 	}
 }
 
@@ -245,9 +247,10 @@ func (s *managerIntegrationSuite) TestDeleteOrganization() {
 	// Arrange
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancelFunc()
-	wasReceived := atomic.NewBool(false)
+	wasReceived := &atomic.Bool{}
+	wasReceived.Store(false)
 	closeReaderFunc := s.setupReader(ctx, organization.TopicDeleted, func(scopedCtx context.Context, message stream.Message) error {
-		wasReceived.Set()
+		wasReceived.Store(true)
 		ev := &iampb.OrganizationDeletedEvent{}
 		s.Require().NoError(proto.Unmarshal(message.Data, ev))
 		s.Assert().Equal("2", ev.GetOrganizationId())
@@ -277,6 +280,6 @@ func (s *managerIntegrationSuite) TestDeleteOrganization() {
 		s.T().Fatal(ctx.Err())
 	case <-time.After(time.Second * 5):
 		// Wait for the message to be consumed
-		s.Assert().True(wasReceived.IsSet(), "message received")
+		s.Assert().True(wasReceived.Load(), "message received")
 	}
 }
