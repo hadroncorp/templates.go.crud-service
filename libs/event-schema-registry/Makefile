@@ -1,4 +1,4 @@
-PROTO_FOLDERS := hadron/places/v1
+PROTO_FOLDERS := hadron/iam/v1
 GENERATED_FOLDERS := generated/go
 
 # [COMPILERS]

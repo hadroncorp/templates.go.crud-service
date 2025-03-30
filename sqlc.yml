@@ -1,0 +1,11 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "./thirdparty/postgres/queries/"
+    schema: "./thirdparty/postgres/migrations/"
+    gen:
+      go:
+        package: "postgresgen"
+        out: "./internal/postgresgen"
+        emit_prepared_queries: false
+        emit_interface: true

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package hadron.iam.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package="event-schema-registry/iampb;iampb";
+
+// OrganizationCreatedEvent is an event that is published when an organization is created.
+message OrganizationCreatedEvent {
+  string organization_id = 1;
+  string name = 2;
+  google.protobuf.Timestamp create_time = 3;
+  string create_by = 4;
+}
+
+// OrganizationUpdatedEvent is an event that is published when an organization is updated.
+message OrganizationUpdatedEvent {
+  string organization_id = 1;
+  string name = 2;
+  google.protobuf.Timestamp update_time = 3;
+  string update_by = 4;
+}
+
+// OrganizationDeletedEvent is an event that is published when an organization is deleted.
+message OrganizationDeletedEvent {
+  string organization_id = 1;
+  google.protobuf.Timestamp delete_time = 11;
+  string delete_by = 12;
+}
