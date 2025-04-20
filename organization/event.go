@@ -119,7 +119,7 @@ func (e UpdatedEvent) BytesContentType() transport.MimeType {
 }
 
 func (e UpdatedEvent) Source() string {
-	return "/organizations"
+	return _eventSource
 }
 
 func (e UpdatedEvent) Subject() string {

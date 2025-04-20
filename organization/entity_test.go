@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/hadroncorp/geck/security/identity"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,7 +55,7 @@ func TestOrganization_Update(t *testing.T) {
 		{
 			name: "valid",
 			inOpts: []organization.UpdateOption{
-				organization.WithUpdatedName("acme-corp-2"),
+				organization.WithUpdatedName(lo.ToPtr("acme-corp-2")),
 			},
 			expName:    "acme-corp-2",
 			expUpdated: true,

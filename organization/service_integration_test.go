@@ -6,21 +6,20 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log/slog"
-	"os"
+	"fmt"
+	"math/rand/v2"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/caarlos0/env/v11"
 	"github.com/hadroncorp/geck/event"
 	"github.com/hadroncorp/geck/persistence/identifier"
 	"github.com/hadroncorp/geck/persistence/postgres/postgrestest"
 	gecksql "github.com/hadroncorp/geck/persistence/sql"
-	"github.com/hadroncorp/geck/transport/stream"
 	"github.com/hadroncorp/geck/transport/stream/kafka"
 	"github.com/hadroncorp/geck/transport/stream/kafka/kafkatest"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
@@ -35,12 +34,11 @@ import (
 type managerIntegrationSuite struct {
 	suite.Suite
 
-	psqlContainer  *postgrestest.Container
-	dbClient       gecksql.DB
-	queryer        *postgresgen.Queries
-	kafkaContainer *kafkatest.Container
-	kafkaConfig    kafka.ClientConfig
-	streamWriter   kafka.SyncWriter
+	psqlContainer       *postgrestest.Container
+	dbClient            gecksql.DB
+	queryer             *postgresgen.Queries
+	kafkaContainer      *kafkatest.Container
+	kafkaProducerClient *kgo.Client
 
 	manager organization.LocalManager
 }
@@ -71,16 +69,16 @@ func (s *managerIntegrationSuite) SetupSuite() {
 	s.Require().NotZero(s.kafkaContainer.SeedBrokerAddrs)
 	s.T().Setenv("KAFKA_SEED_BROKERS", strings.Join(s.kafkaContainer.SeedBrokerAddrs, ","))
 	s.Require().NoError(s.kafkaContainer.Instance.Start(ctx))
-	s.kafkaConfig, err = env.ParseAs[kafka.ClientConfig]()
 	s.Require().NoError(err)
-	kafkaProducerClient, err := kafka.NewClient(s.kafkaConfig,
+	s.kafkaProducerClient, err = kgo.NewClient(
+		kgo.SeedBrokers(s.kafkaContainer.SeedBrokerAddrs...),
 		kgo.AllowAutoTopicCreation(),
 	)
 	s.Require().NoError(err)
-	s.streamWriter = kafka.NewSyncWriter(kafkaProducerClient)
+	streamWriter := kafka.NewSyncWriter(s.kafkaProducerClient)
 
 	// Start manager
-	eventPublisher := event.NewStreamPublisher(s.streamWriter, identifier.FactoryKSUID{})
+	eventPublisher := event.NewStreamPublisher(streamWriter, identifier.FactoryKSUID{})
 	repo := organization.NewPostgresRepository(s.dbClient)
 	s.manager = organization.NewLocalManager(repo, eventPublisher)
 }
@@ -131,28 +129,25 @@ func (s *managerIntegrationSuite) execSeed(ctx context.Context) error {
 func (s *managerIntegrationSuite) TearDownSuite() {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancelFunc()
-	s.Assert().NoError(s.streamWriter.Close())
+	s.kafkaProducerClient.Close()
 	s.Assert().NoError(s.psqlContainer.Instance.Terminate(ctx))
 	s.Assert().NoError(s.kafkaContainer.Instance.Terminate(ctx))
 }
 
-func (s *managerIntegrationSuite) setupReader(ctx context.Context, topic event.Topic, handlerFunc stream.HandlerFunc) func(ctx context.Context) error {
-	kafkaConsumerClient, err := kafka.NewReaderClient(s.kafkaConfig,
-		kafka.WithClientConsumerGroup("test-create-org"),
-		kafka.WithReaderClientBaseOpts(
-			kgo.DisableAutoCommit(),
-			kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+func (s *managerIntegrationSuite) setupReader(topic event.Topic, handlerFunc kafka.ReaderHandlerFunc) func(ctx context.Context) error {
+	var err error
+	readerManager, err := kafka.NewChannelReaderManager(
+		kafka.WithReaderManagerClientOpts(
+			kgo.SeedBrokers(s.kafkaContainer.SeedBrokerAddrs...),
 		),
+		kafka.WithReaderManagerGroupID(fmt.Sprintf("org-test-%d", rand.Int())),
 	)
 	s.Require().NoError(err)
-	kafkaManager := kafka.NewReaderManager(kafkaConsumerClient,
-		kafka.WithReaderLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil))),
-	)
-	kafkaManager.Register(topic.String(), handlerFunc)
+	s.Require().NoError(readerManager.Register(topic.String(), handlerFunc))
 	go func() {
-		_ = kafkaManager.Start(ctx)
+		_ = readerManager.Start()
 	}()
-	return kafkaManager.Close
+	return readerManager.Close
 }
 
 func (s *managerIntegrationSuite) TestCreateOrganization() {
@@ -161,9 +156,9 @@ func (s *managerIntegrationSuite) TestCreateOrganization() {
 	defer cancelFunc()
 	wasReceived := &atomic.Bool{}
 	wasReceived.Store(false)
-	closeReaderFunc := s.setupReader(ctx, organization.TopicCreated, func(scopedCtx context.Context, message stream.Message) error {
+	closeReaderFunc := s.setupReader(organization.TopicCreated, func(scopedCtx context.Context, message *kgo.Record) error {
 		createdEvent := &iampb.OrganizationCreatedEvent{}
-		s.Require().NoError(proto.Unmarshal(message.Data, createdEvent))
+		s.Require().NoError(proto.Unmarshal(message.Value, createdEvent))
 		s.Assert().Equal("3", createdEvent.GetOrganizationId())
 		s.Assert().Equal("foo", createdEvent.GetName())
 		wasReceived.Store(true)
@@ -205,10 +200,10 @@ func (s *managerIntegrationSuite) TestUpdateOrganization() {
 	defer cancelFunc()
 	wasReceived := &atomic.Bool{}
 	wasReceived.Store(false)
-	closeReaderFunc := s.setupReader(ctx, organization.TopicUpdated, func(scopedCtx context.Context, message stream.Message) error {
+	closeReaderFunc := s.setupReader(organization.TopicUpdated, func(scopedCtx context.Context, message *kgo.Record) error {
 		wasReceived.Store(true)
 		ev := &iampb.OrganizationUpdatedEvent{}
-		s.Require().NoError(proto.Unmarshal(message.Data, ev))
+		s.Require().NoError(proto.Unmarshal(message.Value, ev))
 		s.Assert().Equal("1", ev.GetOrganizationId())
 		s.Assert().Equal("updated_org", ev.GetName())
 		s.Assert().NotEmpty(ev.GetUpdateBy())
@@ -221,7 +216,7 @@ func (s *managerIntegrationSuite) TestUpdateOrganization() {
 	}()
 
 	// Act
-	org, err := s.manager.ModifyByID(ctx, "1", organization.WithUpdatedName("updated_org"))
+	org, err := s.manager.ModifyByID(ctx, "1", organization.WithUpdatedName(lo.ToPtr("updated_org")))
 
 	// Assert
 	s.Assert().NoError(err)
@@ -249,10 +244,10 @@ func (s *managerIntegrationSuite) TestDeleteOrganization() {
 	defer cancelFunc()
 	wasReceived := &atomic.Bool{}
 	wasReceived.Store(false)
-	closeReaderFunc := s.setupReader(ctx, organization.TopicDeleted, func(scopedCtx context.Context, message stream.Message) error {
+	closeReaderFunc := s.setupReader(organization.TopicDeleted, func(scopedCtx context.Context, message *kgo.Record) error {
 		wasReceived.Store(true)
 		ev := &iampb.OrganizationDeletedEvent{}
-		s.Require().NoError(proto.Unmarshal(message.Data, ev))
+		s.Require().NoError(proto.Unmarshal(message.Value, ev))
 		s.Assert().Equal("2", ev.GetOrganizationId())
 		s.Assert().NotEmpty(ev.GetDeleteBy())
 		s.Require().NotNil(ev.GetDeleteTime())

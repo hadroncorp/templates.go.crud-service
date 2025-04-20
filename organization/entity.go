@@ -5,6 +5,7 @@ import (
 
 	"github.com/hadroncorp/geck/event"
 	"github.com/hadroncorp/geck/persistence/audit"
+	"github.com/samber/lo"
 )
 
 // Organization is a group of people who work together to achieve a common goal.
@@ -67,8 +68,12 @@ func (o *Organization) Delete(ctx context.Context) {
 type UpdateOption func(o *Organization)
 
 // WithUpdatedName sets the new name of the [Organization].
-func WithUpdatedName(name string) UpdateOption {
+func WithUpdatedName(name *string) UpdateOption {
+	if name == nil {
+		// no-op
+		return func(_ *Organization) {}
+	}
 	return func(o *Organization) {
-		o.name = name
+		o.name = lo.FromPtr(name)
 	}
 }

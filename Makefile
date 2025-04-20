@@ -1,4 +1,6 @@
-add-migration:
+
+# - Migration -
+gen-migration:
 	goose -env .goose.env -s create ${NAME} sql
 
 up-migration:
@@ -6,6 +8,8 @@ up-migration:
 
 down-migration:
 	goose -env .goose.env down
+
+# - Testing -
 
 # This follows the convention of the package name according to big tech companies style guides.
 gen-mock:

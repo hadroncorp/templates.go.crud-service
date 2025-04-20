@@ -16,6 +16,7 @@ import (
 	"github.com/hadroncorp/geck/persistence/paging"
 	"github.com/hadroncorp/geck/persistence/postgres/postgrestest"
 	gecksql "github.com/hadroncorp/geck/persistence/sql"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/hadroncorp/service-template/internal/postgresgen"
@@ -174,7 +175,7 @@ func (s *postgresRepositoryIntegrationSuite) TestPostgresRepository_Save_Create(
 func (s *postgresRepositoryIntegrationSuite) TestPostgresRepository_Save_Update() {
 	// arrange
 	entity := organization.New(s.baseCtx, "2", "baz")
-	_ = entity.Update(s.baseCtx, organization.WithUpdatedName("baz-updated"))
+	_ = entity.Update(s.baseCtx, organization.WithUpdatedName(lo.ToPtr("baz-updated")))
 	// act
 	err := s.repository.Save(s.baseCtx, entity)
 	// assert

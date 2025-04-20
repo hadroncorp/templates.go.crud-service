@@ -139,7 +139,7 @@ func (s *localManagerSuite) TestLocalManager_ModifyByID_Modified() {
 	manager = organization.NewLocalManager(repository, eventPublisher)
 
 	// act
-	out, err := manager.ModifyByID(ctx, "1", organization.WithUpdatedName("bar"))
+	out, err := manager.ModifyByID(ctx, "1", organization.WithUpdatedName(lo.ToPtr("bar")))
 
 	// assert
 	s.Assert().NoError(err)
@@ -168,7 +168,7 @@ func (s *localManagerSuite) TestLocalManager_ModifyByID_Already_Exists() {
 
 	var manager organization.Manager
 	manager = organization.NewLocalManager(repository, eventPublisher)
-	_, err := manager.ModifyByID(ctx, "1", organization.WithUpdatedName("bar"))
+	_, err := manager.ModifyByID(ctx, "1", organization.WithUpdatedName(lo.ToPtr("bar")))
 	s.Assert().ErrorAs(err, &organization.ErrAlreadyExists)
 }
 
